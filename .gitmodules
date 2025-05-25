@@ -1,0 +1,3 @@
+[submodule "backend/pdfquery"]
+	path = backend/pdfquery
+	url = https://github.com/maazghani/pdfquery.git
