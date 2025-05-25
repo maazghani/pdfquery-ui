@@ -1,86 +1,62 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 
-type Message = {
-  role: 'user' | 'assistant';
-  text: string;
-};
+type Msg = { role: 'user' | 'assistant'; text: string };
 
 export default function ChatClient({ slug }: { slug: string }) {
-  const [question, setQuestion] = useState('');
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [msgs, setMsgs] = useState<Msg[]>([]);
+  const [txt, setTxt]   = useState('');
+  const [apiKey]        = useState(localStorage.getItem('openai-key') || '');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [apiKey, setApiKey] = useState<string>(
-    typeof window !== 'undefined' ? localStorage.getItem('openai-key') || '' : ''
-  );
+  const bottomRef = useRef<HTMLDivElement>(null);
 
-  async function sendQuestion() {
-    if (!question || !apiKey) return;
+  async function send() {
+    if (!txt.trim() || !apiKey) return;
+    setMsgs(m => [...m, { role: 'user', text: txt }]);
+    setTxt('');
     setLoading(true);
-    setError(null);
 
-    setMessages((prev) => [...prev, { role: 'user', text: question }]);
-
-    try {
-      const res = await fetch('/api/query', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug, question, key: apiKey }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Failed to get response');
-      }
-
-      const answer = await res.text();
-      setMessages((prev) => [...prev, { role: 'assistant', text: answer }]);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-      setQuestion('');
-    }
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendQuestion();
-    }
+    const res = await fetch('/api/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slug, question: txt, key: apiKey })
+    });
+    const answer = await res.text();
+    setMsgs(m => [...m, { role: 'assistant', text: answer }]);
+    setLoading(false);
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }
 
   return (
-    <div className="flex flex-col gap-4 max-w-2xl mx-auto">
-      <div className="border p-4 rounded h-[400px] overflow-y-auto bg-white shadow-inner">
-        {messages.map((m, i) => (
-          <div key={i} className={`mb-2 ${m.role === 'user' ? 'text-blue-600' : 'text-black'}`}>
-            <strong>{m.role === 'user' ? 'You' : 'Assistant'}:</strong> {m.text}
-          </div>
+    <div className="w-full flex flex-col gap-6">
+      {/* message window */}
+      <div className="h-[400px] overflow-y-auto rounded bg-[#2a2a2a] p-4 space-y-4">
+        {msgs.map((m, i) => (
+          <p key={i} className={m.role === 'user' ? 'text-blue-400' : 'text-gray-200'}>
+            {m.text}
+          </p>
         ))}
-        {loading && <div className="text-gray-500">Thinking...</div>}
+        {loading && <p className="text-gray-500">…thinking</p>}
+        <div ref={bottomRef} />
       </div>
 
-      <textarea
-        rows={2}
-        className="border p-2 rounded resize-none"
-        placeholder="Ask a question..."
-        value={question}
-        onChange={(e) => setQuestion(e.target.value)}
-        onKeyDown={handleKeyDown}
-        disabled={loading}
-      />
-
-      <button
-        className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
-        onClick={sendQuestion}
-        disabled={loading || !question || !apiKey}
-      >
-        Send
-      </button>
-
-      {error && <p className="text-red-600 text-sm">{error}</p>}
+      {/* input */}
+      <div className="relative w-full">
+        <textarea
+          rows={1}
+          className="w-full resize-none rounded-full bg-[#333] placeholder-gray-400 outline-none px-5 py-4 pr-28"
+          placeholder="Ask anything"
+          value={txt}
+          onChange={e => setTxt(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
+        />
+        <button
+          onClick={send}
+          className="absolute right-2 top-1/2 -translate-y-1/2 bg-white text-black rounded-full px-4 py-2 font-medium"
+        >
+          Send
+        </button>
+      </div>
     </div>
   );
 }
