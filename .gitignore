@@ -1,0 +1,8 @@
+node_modules
+*venv*
+.next
+vector
+next-env.d.ts
+.env.local
+
+
