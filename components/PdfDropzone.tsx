@@ -4,68 +4,69 @@ import ChatClient from './ChatClient';
 
 export default function PdfDropzone() {
   const [slug, setSlug] = useState<string | null>(null);
-  const [apiKey, setApiKey] = useState<string>(
-    typeof window !== 'undefined' ? localStorage.getItem('openai-key') || '' : ''
-  );
-  const [uploading, setUploading] = useState(false);
+  const [apiKey, setApiKey] = useState(localStorage.getItem('openai-key') || '');
+  const [drag, setDrag]   = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file || !apiKey) {
-      setError('Both PDF file and API key are required.');
-      return;
-    }
-
-    setUploading(true);
-    setError(null);
+  async function handleFile(file: File) {
+    if (!apiKey) { setError('Enter your API key first'); return; }
 
     const form = new FormData();
     form.append('file', file);
     form.append('key', apiKey);
 
-    try {
-      const res = await fetch('/api/index', { method: 'POST', body: form });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Failed to upload');
-      }
-
-      const data = await res.json();
-      setSlug(data.slug);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setUploading(false);
+    const res = await fetch('/api/index', { method: 'POST', body: form });
+    if (!res.ok) {
+      const { error } = await res.json();
+      setError(error || 'Upload failed');
+      return;
     }
+    const { slug } = await res.json();
+    setSlug(slug);
   }
 
-  function onApiKeyChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const key = e.target.value;
-    setApiKey(key);
-    localStorage.setItem('openai-key', key);
-  }
+  if (slug) return <ChatClient slug={slug} />;
 
-  return slug ? (
-    <ChatClient slug={slug} />
-  ) : (
-    <div className="flex flex-col gap-4">
+  return (
+    <div className="w-full flex flex-col gap-4">
+      {/* key input */}
       <input
         type="password"
-        placeholder="Enter your OpenAI API key"
-        className="border rounded p-2"
+        placeholder="OpenAI API key..."
+        className="w-full border border-gray-600 bg-[#111] rounded px-4 py-3 focus:outline-none"
         value={apiKey}
-        onChange={onApiKeyChange}
+        onChange={e => {
+          setApiKey(e.target.value);
+          localStorage.setItem('openai-key', e.target.value);
+        }}
       />
-      <input
-        type="file"
-        accept="application/pdf"
-        className="border rounded p-2"
-        onChange={onFile}
-        disabled={uploading}
-      />
-      {uploading && <p className="text-sm text-gray-500">Uploading and indexing PDF…</p>}
-      {error && <p className="text-sm text-red-600">{error}</p>}
+
+      {/* drag-and-drop zone */}
+      <label
+        onDragOver={e => { e.preventDefault(); setDrag(true); }}
+        onDragLeave={() => setDrag(false)}
+        onDrop={e => {
+          e.preventDefault(); setDrag(false);
+          const file = e.dataTransfer.files?.[0];
+          if (file) handleFile(file);
+        }}
+        className={`flex flex-col items-center justify-center border-2 border-dashed rounded-xl h-40 cursor-pointer
+          ${drag ? 'border-blue-500 bg-blue-500/10' : 'border-gray-600 bg-[#111]'}`}
+      >
+        <p className="text-gray-400">Drag & drop your PDF here</p>
+        <p className="text-gray-600 text-sm">or click to choose a file</p>
+        <input
+          type="file"
+          accept="application/pdf"
+          hidden
+          onChange={e => {
+            const file = e.target.files?.[0];
+            if (file) handleFile(file);
+          }}
+        />
+      </label>
+
+      {error && <p className="text-red-500 text-sm">{error}</p>}
     </div>
   );
 }
